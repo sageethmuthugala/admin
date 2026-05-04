@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevStudio | Emergency Admin Control</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; background: #020617; color: #94a3b8; min-height: 100vh; }
+        .admin-gradient { background: radial-gradient(circle at top left, #0f172a, #020617); }
+        .code-font { font-family: 'Fira Code', monospace; }
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    </style>
+</head>
+<body class="admin-gradient p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <!-- HEADER -->
+        <header class="flex justify-between items-end mb-12 border-b border-white/5 pb-8">
+            <div>
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <h2 class="text-emerald-500 font-black tracking-[0.4em] text-[10px] uppercase">System Live</h2>
+                </div>
+                <h1 class="text-4xl font-black text-white tracking-tighter">Emergency <span class="text-slate-500">Registry</span></h1>
+            </div>
+            <div class="flex gap-3">
+                <!-- NEW: GLOBAL EXPORT -->
+                <button onclick="exportFullRegistry()" class="px-5 py-2 bg-emerald-600/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-600 hover:text-white rounded-xl text-xs font-bold transition-all">
+                    DOWNLOAD REGISTRY (.JSON)
+                </button>
+                <button onclick="refreshData()" class="px-5 py-2 bg-slate-800 hover:bg-white hover:text-black rounded-xl text-xs font-bold transition-all">
+                    REFRESH DATABASE
+                </button>
+            </div>
+        </header>
+
+        <!-- DASHBOARD GRID -->
+        <div class="grid grid-cols-12 gap-8 h-[70vh]">
+            
+            <!-- LEFT: PROJECT DIRECTORY -->
+            <div class="col-span-4 flex flex-col bg-slate-900/40 rounded-[2rem] border border-white/5 p-6 overflow-hidden">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest">Global Records</h3>
+                    <span id="statCount" class="text-[10px] bg-slate-800 px-2 py-1 rounded text-emerald-400 font-mono">0 PROJECTS</span>
+                </div>
+                
+                <div id="directory" class="flex-1 overflow-y-auto pr-2 space-y-2 custom-scroll"></div>
+            </div>
+
+            <!-- RIGHT: EMERGENCY INSPECTOR -->
+            <div class="col-span-8 flex flex-col bg-black/50 rounded-[2rem] border border-emerald-500/10 p-8 overflow-hidden relative">
+                <div id="inspectorHeader" class="hidden h-full flex flex-col">
+                    <div class="flex justify-between items-start mb-6">
+                        <div>
+                            <h3 id="viewingName" class="text-2xl font-bold text-white mb-1">Select Project</h3>
+                            <p id="viewingSync" class="text-xs text-slate-500 font-mono"></p>
+                        </div>
+                        <div class="flex gap-2">
+                            <!-- NEW: INDIVIDUAL EXPORT -->
+                            <button id="exportBtn" class="px-4 py-2 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-lg text-[10px] font-black hover:bg-blue-600 hover:text-white transition-all">
+                                EXPORT HTML
+                            </button>
+                            <button onclick="copyCode()" class="px-4 py-2 bg-emerald-600/10 text-emerald-500 border border-emerald-500/20 rounded-lg text-[10px] font-black hover:bg-emerald-600 hover:text-white transition-all">
+                                COPY SOURCE
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex-1 relative group overflow-hidden">
+                        <pre id="codeView" class="code-font text-[12px] text-emerald-400/80 leading-relaxed bg-black/40 p-6 rounded-2xl border border-white/5 overflow-auto h-full custom-scroll whitespace-pre-wrap"></pre>
+                    </div>
+                </div>
+
+                <!-- EMPTY STATE -->
+                <div id="emptyState" class="flex-1 flex items-center justify-center text-center">
+                    <div>
+                        <div class="mb-4 opacity-20 flex justify-center">
+                            <svg class="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-width="1"></path></svg>
+                        </div>
+                        <p class="text-slate-600 text-sm italic">Waiting for record selection...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="mt-8 flex justify-between text-[10px] font-bold text-slate-700 tracking-widest uppercase">
+            <div>Auth Level: Super-Admin</div>
+            <div>Secure Connection: LocalStorage.V9.Linked</div>
+        </footer>
+    </div>
+
+    <script>
+        const DB_KEY = 'devstudio_linked_v9';
+        let currentActiveName = "";
+        let currentActiveCode = "";
+
+        function refreshData() {
+            const directory = document.getElementById('directory');
+            const data = JSON.parse(localStorage.getItem(DB_KEY) || '{}');
+            const keys = Object.keys(data);
+            
+            document.getElementById('statCount').innerText = `${keys.length} PROJECTS`;
+            directory.innerHTML = "";
+
+            if(keys.length === 0) {
+                directory.innerHTML = `<div class="text-center py-10 text-slate-700 text-xs italic">No linked projects found.</div>`;
+                return;
+            }
+
+            keys.forEach(name => {
+                const item = document.createElement('div');
+                item.className = "group p-4 bg-slate-900/50 rounded-xl border border-transparent hover:border-emerald-500/30 cursor-pointer transition-all";
+                item.onclick = () => inspect(name, data[name]);
+                item.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-bold text-slate-300 group-hover:text-emerald-400 transition">${name}</span>
+                        <svg class="w-3 h-3 text-slate-700 group-hover:text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-width="3"></path></svg>
+                    </div>
+                    <div class="text-[9px] text-slate-600 mt-1 uppercase tracking-tighter">${data[name].lastSync}</div>
+                `;
+                directory.appendChild(item);
+            });
+        }
+
+        function inspect(name, project) {
+            currentActiveName = name;
+            currentActiveCode = project.code;
+
+            document.getElementById('emptyState').classList.add('hidden');
+            document.getElementById('inspectorHeader').classList.remove('hidden');
+            
+            document.getElementById('viewingName').innerText = name;
+            document.getElementById('viewingSync').innerText = `CRITICAL BACKUP: ${project.lastSync}`;
+            document.getElementById('codeView').innerText = project.code;
+
+            // Link the export button to this specific project
+            document.getElementById('exportBtn').onclick = () => exportProject(name, project.code);
+        }
+
+        function exportProject(name, code) {
+            const blob = new Blob([code], {type: 'text/html'});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `ADMIN_RECOVERY_${name}.html`;
+            a.click();
+        }
+
+        function exportFullRegistry() {
+            const data = localStorage.getItem(DB_KEY);
+            if(!data || data === "{}") return alert("No data to export.");
+            
+            const blob = new Blob([data], {type: 'application/json'});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `DEVSTUDIO_FULL_REGISTRY_BACKUP.json`;
+            a.click();
+        }
+
+        function copyCode() {
+            const code = document.getElementById('codeView').innerText;
+            navigator.clipboard.writeText(code).then(() => {
+                alert("Emergency Code Copied to Clipboard");
+            });
+        }
+
+        window.onload = refreshData;
+    </script>
+</body>
+</html>
